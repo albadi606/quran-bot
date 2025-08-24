@@ -3,7 +3,7 @@ import requests
 import json
 import random
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 
 class QuranBot:
@@ -13,6 +13,15 @@ class QuranBot:
         self.api_secret = os.getenv("API_SECRET")
         self.access_token = os.getenv("ACCESS_TOKEN")
         self.access_token_secret = os.getenv("ACCESS_TOKEN_SECRET")
+        self.bearer_token = os.getenv("BEARER_TOKEN")
+
+        # Debug: Check if credentials are loaded
+        print(f"🔍 Debug - Checking credentials:")
+        print(f"  API_KEY: {'✅ Loaded' if self.api_key else '❌ Missing'}")
+        print(f"  API_SECRET: {'✅ Loaded' if self.api_secret else '❌ Missing'}")
+        print(f"  ACCESS_TOKEN: {'✅ Loaded' if self.access_token else '❌ Missing'}")
+        print(f"  ACCESS_TOKEN_SECRET: {'✅ Loaded' if self.access_token_secret else '❌ Missing'}")
+        print(f"  BEARER_TOKEN: {'✅ Loaded' if self.bearer_token else '❌ Missing'}")
 
         # Initialize Twitter API
         self.setup_twitter_api()
@@ -29,28 +38,59 @@ class QuranBot:
 
         
     def setup_twitter_api(self):
-        """Initialize Twitter API connection"""
+        """Initialize Twitter API connection with multiple authentication methods"""
         print("🔄 Attempting to authenticate with X API...")
         
-        try:
-            print("📝 OAuth 1.0a authentication...")
-            self.client = tweepy.Client(
-                consumer_key=self.api_key,
-                consumer_secret=self.api_secret,
-                access_token=self.access_token,
-                access_token_secret=self.access_token_secret,
-                wait_on_rate_limit=True
-            )
-            
-            # Test the connection
-            me = self.client.get_me()
-            if me.data:
-                print(f"✅ Authentication successful!")
-                print(f"🤖 Connected as: @{me.data.username}")
-                return
+        # Method 1: Try with Bearer Token (API v2)
+        if self.bearer_token:
+            try:
+                print("🔑 Trying Bearer Token authentication...")
+                self.client = tweepy.Client(
+                    bearer_token=self.bearer_token,
+                    consumer_key=self.api_key,
+                    consumer_secret=self.api_secret,
+                    access_token=self.access_token,
+                    access_token_secret=self.access_token_secret,
+                    wait_on_rate_limit=True
+                )
                 
-        except Exception as e:
-            print(f"❌ Authentication failed: {e}")
+                # Test the connection
+                me = self.client.get_me()
+                if me.data:
+                    print(f"✅ Bearer Token authentication successful!")
+                    print(f"🤖 Connected as: @{me.data.username}")
+                    return
+                    
+            except Exception as e:
+                print(f"❌ Bearer Token authentication failed: {e}")
+        
+        # Method 2: Try OAuth 1.0a only
+        if all([self.api_key, self.api_secret, self.access_token, self.access_token_secret]):
+            try:
+                print("📝 Trying OAuth 1.0a authentication...")
+                self.client = tweepy.Client(
+                    consumer_key=self.api_key,
+                    consumer_secret=self.api_secret,
+                    access_token=self.access_token,
+                    access_token_secret=self.access_token_secret,
+                    wait_on_rate_limit=True
+                )
+                
+                # Test the connection
+                me = self.client.get_me()
+                if me.data:
+                    print(f"✅ OAuth 1.0a authentication successful!")
+                    print(f"🤖 Connected as: @{me.data.username}")
+                    return
+                    
+            except Exception as e:
+                print(f"❌ OAuth 1.0a authentication failed: {e}")
+        else:
+            print("❌ Missing required OAuth 1.0a credentials")
+        
+        # If we get here, authentication failed
+        print("❌ All authentication methods failed!")
+        print("🔧 Please check your environment variables and API credentials")
             
     def load_state(self):
         """Load bot state from file"""
@@ -58,8 +98,10 @@ class QuranBot:
             if os.path.exists(self.state_file):
                 with open(self.state_file, 'r') as f:
                     self.state = json.load(f)
+                print(f"📂 Loaded existing state from {self.state_file}")
             else:
                 self.state = self.create_initial_state()
+                print("🆕 Created new bot state")
         except Exception as e:
             print(f"⚠️ Error loading state: {e}")
             self.state = self.create_initial_state()
@@ -82,7 +124,9 @@ class QuranBot:
         """Select a chapter for the current month (can have 400+ verses)"""
         # Chapters with enough verses for 400 posts
         large_chapters = [2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 16, 17, 18, 20, 21, 26, 37]
-        return random.choice(large_chapters)
+        selected = random.choice(large_chapters)
+        print(f"📖 Selected chapter {selected} for this month")
+        return selected
     
     def save_state(self):
         """Save bot state to file"""
@@ -140,13 +184,18 @@ class QuranBot:
         try:
             if not self.state['chapter_verse_count']:
                 surah_info_url = f"{self.quran_api_base}/surah/{self.state['current_chapter']}"
+                print(f"🔍 Fetching chapter info from: {surah_info_url}")
                 response = requests.get(surah_info_url)
                 data = response.json()
                 
                 if data['code'] == 200:
                     self.state['chapter_verse_count'] = data['data']['numberOfAyahs']
+                    chapter_name = data['data']['englishName']
+                    print(f"📖 Chapter {self.state['current_chapter']} ({chapter_name}) has {self.state['chapter_verse_count']} verses")
                     self.save_state()
                     return data['data']
+                else:
+                    print(f"❌ API returned error code: {data['code']}")
                     
         except Exception as e:
             print(f"❌ Error getting chapter info: {e}")
@@ -161,6 +210,7 @@ class QuranBot:
             # Get chapter info if not cached
             chapter_info = self.get_chapter_info()
             if not chapter_info:
+                print("❌ Could not get chapter info")
                 return None
             
             # Check if we've reached the end of the chapter
@@ -172,6 +222,9 @@ class QuranBot:
             # Get the verse in Arabic and English
             arabic_url = f"{self.quran_api_base}/ayah/{chapter}:{verse}"
             english_url = f"{self.quran_api_base}/ayah/{chapter}:{verse}/en.sahih"
+            
+            print(f"🔍 Fetching verse from: {arabic_url}")
+            print(f"🔍 Fetching translation from: {english_url}")
             
             arabic_response = requests.get(arabic_url)
             english_response = requests.get(english_url)
@@ -188,7 +241,10 @@ class QuranBot:
                     'ayah_number': verse,
                     'reference': f"Surah {arabic_data['data']['surah']['englishName']} ({chapter}:{verse})"
                 }
+                print(f"✅ Successfully fetched: {verse_data['reference']}")
                 return verse_data
+            else:
+                print(f"❌ API error - Arabic: {arabic_data.get('code')}, English: {english_data.get('code')}")
                 
         except Exception as e:
             print(f"❌ Error fetching verse: {e}")
@@ -204,6 +260,8 @@ class QuranBot:
         tweet += f'"{verse_data["english"]}"\n\n'
         tweet += f"— {verse_data['reference']}"
         
+        print(f"📝 Initial tweet length: {len(tweet)} characters")
+        
         # Handle Twitter's 280 character limit
         if len(tweet) > 280:
             # Calculate available space for English translation
@@ -216,6 +274,8 @@ class QuranBot:
                 tweet = f"{verse_data['arabic']}\n\n"
                 tweet += f'"{truncated_english}"\n\n'
                 tweet += f"— {verse_data['reference']}"
+                
+                print(f"📝 Truncated tweet length: {len(tweet)} characters")
         
         return tweet
     
@@ -237,6 +297,10 @@ class QuranBot:
                     if not hasattr(self, 'client'):
                         print("❌ Twitter client not initialized")
                         return False
+                    
+                    print(f"📤 Posting tweet...")
+                    print(f"📝 Tweet content:\n{tweet_text}")
+                    print(f"📏 Tweet length: {len(tweet_text)} characters")
                     
                     # Post the tweet
                     response = self.client.create_tweet(text=tweet_text)
@@ -267,6 +331,7 @@ class QuranBot:
     
     def run_bot(self):
         """Run the bot once"""
+        print(f"\n{'='*60}")
         print(f"🕐 Bot started at {datetime.now()}")
         print(f"📖 Current chapter: {self.state['current_chapter']}")
         print(f"📄 Next verse: {self.state['current_verse_number']}")
@@ -302,7 +367,7 @@ def run_continuously():
         print(f"\n{'='*60}")
         print(f"🕐 Starting hourly cycle at {datetime.now()}")
         
-        success = bot.post_verse()
+        success = bot.run_bot()
         
         if success:
             print("✅ Verse posted successfully!")
