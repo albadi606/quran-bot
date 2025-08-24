@@ -8,24 +8,25 @@ import os
 
 class QuranBot:
     def __init__(self):
-        # Twitter API credentials - REPLACE WITH YOUR NEW KEYS
-self.api_key = os.getenv("API_KEY")
-self.api_secret = os.getenv("API_SECRET")
-self.access_token = os.getenv("ACCESS_TOKEN")
-self.access_token_secret = os.getenv("ACCESS_TOKEN_SECRET")
-        
-    # Initialize Twitter API
+        # Load Twitter API keys from GitHub Secrets
+        self.api_key = os.getenv("API_KEY")
+        self.api_secret = os.getenv("API_SECRET")
+        self.access_token = os.getenv("ACCESS_TOKEN")
+        self.access_token_secret = os.getenv("ACCESS_TOKEN_SECRET")
+
+        # Initialize Twitter API
         self.setup_twitter_api()
-        
+
         # Quran API base URL
         self.quran_api_base = "https://api.alquran.cloud/v1"
-        
+
         # Monthly limit
         self.MONTHLY_VERSE_LIMIT = 400
-        
-        # State file to track progress
+
+        # State file
         self.state_file = "quran_bot_state.json"
         self.load_state()
+
         
     def setup_twitter_api(self):
         """Initialize Twitter API connection"""
