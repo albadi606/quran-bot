@@ -6,18 +6,38 @@ import time
 from datetime import datetime
 import os
 
+# Load environment variables from .env file for local development
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    print("🔧 Loaded .env file for local development")
+except ImportError:
+    print("🔧 python-dotenv not installed (that's fine for GitHub Actions)")
+except Exception as e:
+    print(f"🔧 Note: Could not load .env file: {e}")
+
 class QuranBot:
     def __init__(self):
-        # Twitter API credentials - Read from environment variables
+        # Twitter API credentials - Read from environment variables only
         self.api_key = os.getenv('TWITTER_API_KEY')
         self.api_secret = os.getenv('TWITTER_API_SECRET')
         self.access_token = os.getenv('TWITTER_ACCESS_TOKEN')
         self.access_token_secret = os.getenv('TWITTER_ACCESS_TOKEN_SECRET')
         self.bearer_token = os.getenv('TWITTER_BEARER_TOKEN')
         
-        # Validate credentials
+        # Validate that all required credentials are present
         if not all([self.api_key, self.api_secret, self.access_token, self.access_token_secret]):
-            raise ValueError("Missing Twitter API credentials in environment variables")
+            print("❌ Missing Twitter API credentials!")
+            print("🔧 Please set the following environment variables:")
+            print("   - TWITTER_API_KEY")
+            print("   - TWITTER_API_SECRET") 
+            print("   - TWITTER_ACCESS_TOKEN")
+            print("   - TWITTER_ACCESS_TOKEN_SECRET")
+            print("   - TWITTER_BEARER_TOKEN")
+            raise ValueError("Missing required Twitter API credentials in environment variables")
+        
+        # Debug: Show that we're using environment variables
+        print("🔧 Using environment variables for API credentials")
         
         # Initialize Twitter API
         self.setup_twitter_api()
@@ -52,6 +72,8 @@ class QuranBot:
                 print(f"✅ Authentication successful!")
                 print(f"🤖 Connected as: @{me.data.username}")
                 return
+            else:
+                raise Exception("No user data returned from Twitter API")
                 
         except Exception as e:
             print(f"❌ Authentication failed: {e}")
@@ -123,14 +145,27 @@ class QuranBot:
             self.save_state()
     
     def can_post_now(self):
-        """Check if we can post now (monthly limit only - hourly handled by GitHub Actions)"""
+        """Check if we can post now (adapted for both local and GitHub Actions)"""
         # Check monthly limit
         if self.state['verses_posted_this_month'] >= self.MONTHLY_VERSE_LIMIT:
             print(f"🛑 Monthly limit of {self.MONTHLY_VERSE_LIMIT} verses reached!")
             return False
         
-        # For GitHub Actions, we don't need to check hourly limit
-        # as the schedule handles the timing
+        # For GitHub Actions, skip hourly check (scheduling handles it)
+        if os.getenv('GITHUB_ACTIONS'):
+            print("🚀 Running in GitHub Actions - skipping hourly limit check")
+            return True
+        
+        # For local runs, check hourly limit
+        if self.state['last_post_time']:
+            last_post = datetime.fromisoformat(self.state['last_post_time'])
+            time_diff = datetime.now() - last_post
+            
+            if time_diff.total_seconds() < 3600:  # 1 hour = 3600 seconds
+                minutes_remaining = int((3600 - time_diff.total_seconds()) / 60)
+                print(f"⏰ Must wait {minutes_remaining} more minutes before next post")
+                return False
+        
         return True
     
     def get_chapter_info(self):
@@ -236,6 +271,8 @@ class QuranBot:
                         print("❌ Twitter client not initialized")
                         return False
                     
+                    print(f"📝 Tweet preview: {tweet_text[:100]}...")
+                    
                     # Post the tweet
                     response = self.client.create_tweet(text=tweet_text)
                     if response.data:
@@ -283,19 +320,48 @@ class QuranBot:
             
         return success
 
-# Main execution for GitHub Actions
-if __name__ == "__main__":
+# For running the bot once
+def main():
     try:
         bot = QuranBot()
         success = bot.run_bot()
         
         if success:
-            print("🎉 GitHub Actions run completed successfully!")
+            print("🎉 Bot execution completed successfully!")
             exit(0)
         else:
-            print("❌ GitHub Actions run completed with issues!")
+            print("⚠️ Bot execution completed with issues!")
             exit(1)
             
     except Exception as e:
         print(f"💥 Critical error: {e}")
         exit(1)
+
+if __name__ == "__main__":
+    main()
+
+# For continuous running (run every hour)
+def run_continuously():
+    """Run the bot every hour"""
+    from datetime import timedelta
+    
+    bot = QuranBot()
+    
+    while True:
+        print(f"\n{'='*60}")
+        print(f"🕐 Starting hourly cycle at {datetime.now()}")
+        
+        success = bot.post_verse()
+        
+        if success:
+            print("✅ Verse posted successfully!")
+        else:
+            print("❌ Skipped or failed to post verse")
+        
+        # Calculate next run time
+        next_run = datetime.now() + timedelta(hours=1)
+        print(f"😴 Sleeping for 1 hour...")
+        print(f"⏰ Next post scheduled for {next_run.strftime('%Y-%m-%d %H:%M:%S')}")
+        
+        # Sleep for 1 hour (3600 seconds)
+        time.sleep(3600)
