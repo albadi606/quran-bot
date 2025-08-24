@@ -15,11 +15,11 @@ class QuranBot:
         self.access_token_secret = os.getenv("ACCESS_TOKEN_SECRET")
         self.bearer_token = os.getenv("BEARER_TOKEN")
 
-print("🔑 API_KEY loaded?", self.api_key is not None)
-print("🔑 API_SECRET loaded?", self.api_secret is not None)
-print("🔑 ACCESS_TOKEN loaded?", self.access_token is not None)
-print("🔑 ACCESS_TOKEN_SECRET loaded?", self.access_token_secret is not None)
-print("🔑 BEARER_TOKEN loaded?", self.bearer_token is not None)
+        print("🔑 API_KEY loaded?", self.api_key is not None)
+        print("🔑 API_SECRET loaded?", self.api_secret is not None)
+        print("🔑 ACCESS_TOKEN loaded?", self.access_token is not None)
+        print("🔑 ACCESS_TOKEN_SECRET loaded?", self.access_token_secret is not None)
+        print("🔑 BEARER_TOKEN loaded?", self.bearer_token is not None)
 
 
         # Initialize Twitter API
