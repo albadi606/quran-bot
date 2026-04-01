@@ -3,7 +3,7 @@ import requests
 import json
 import random
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 
 class QuranBot:
@@ -300,49 +300,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-# For continuous running (run every hour)
-def run_continuously():
-    """Run the bot every hour"""
-    bot = QuranBot()
-    
-    while True:
-        print(f"\n{'='*60}")
-        print(f"🕐 Starting hourly cycle at {datetime.now()}")
-        
-        success = bot.post_verse()
-        
-        if success:
-            print("✅ Verse posted successfully!")
-        else:
-            print("❌ Skipped or failed to post verse")
-        
-        # Calculate next run time
-        next_run = datetime.now() + timedelta(hours=1)
-        print(f"😴 Sleeping for 1 hour...")
-        print(f"⏰ Next post scheduled for {next_run.strftime('%Y-%m-%d %H:%M:%S')}")
-        
-        # Sleep for 1 hour (3600 seconds)
-        time.sleep(3600)
-
-# Alternative: Run with precise hourly timing
-def run_on_schedule():
-    """Run the bot at the top of each hour"""
-    import schedule
-    
-    bot = QuranBot()
-    
-    def job():
-        print(f"\n{'='*60}")
-        print(f"🕐 Scheduled run at {datetime.now()}")
-        bot.run_bot()
-    
-    # Schedule to run at the top of every hour
-    schedule.every().hour.at(":00").do(job)
-    
-    print("📅 Bot scheduled to run every hour at :00")
-    print("🔄 Waiting for scheduled times...")
-    
-    while True:
-        schedule.run_pending()
-        time.sleep(60)  # Check every minute
