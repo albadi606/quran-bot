@@ -1,9 +1,9 @@
 import tweepy
 import requests
 import json
+import time
 from datetime import datetime
 import os
-import time
 
 
 class QuranBot:
@@ -12,7 +12,6 @@ class QuranBot:
         self.api_secret = os.getenv("API_SECRET")
         self.access_token = os.getenv("ACCESS_TOKEN")
         self.access_token_secret = os.getenv("ACCESS_TOKEN_SECRET")
-        self.bearer_token = os.getenv("BEARER_TOKEN")
 
         self.setup_twitter_api()
 
@@ -21,14 +20,14 @@ class QuranBot:
         self.load_state()
 
     def setup_twitter_api(self):
-        self.client = tweepy.Client(
-            consumer_key=self.api_key,
-            consumer_secret=self.api_secret,
-            access_token=self.access_token,
-            access_token_secret=self.access_token_secret,
-            wait_on_rate_limit=True
+        auth = tweepy.OAuth1UserHandler(
+            self.api_key, self.api_secret,
+            self.access_token, self.access_token_secret
         )
-        print("Twitter client initialized")
+        self.api = tweepy.API(auth, wait_on_rate_limit=True)
+        # Verify credentials
+        user = self.api.verify_credentials()
+        print(f"Authenticated as @{user.screen_name}")
 
     def load_state(self):
         try:
@@ -112,15 +111,12 @@ class QuranBot:
         return tweet
 
     def advance_to_next_verse(self):
-        """Move to the next verse. If surah ends, go to next surah. After 114, loop back to 1."""
         surah = self.state['current_surah']
         verse = self.state['current_verse']
 
         verse_count = self.get_surah_verse_count(surah)
         if verse_count and verse >= verse_count:
-            # Move to next surah
             if surah >= 114:
-                # Finished the entire Quran, start over
                 self.state['current_surah'] = 1
                 self.state['current_verse'] = 1
                 print("Completed the entire Quran! Starting over from Al-Fatiha.")
@@ -147,30 +143,25 @@ class QuranBot:
             print("Failed to format tweet")
             return False
 
-        # Retry up to 3 times for transient server errors
-        response = None
+        # Retry up to 3 times for transient errors
         for attempt in range(3):
             try:
-                response = self.client.create_tweet(text=tweet_text)
-                break
-            except tweepy.errors.TwitterServerError as e:
-                print(f'Server error (attempt {attempt + 1}/3): {e}')
+                status = self.api.update_status(status=tweet_text)
+                self.state['total_verses_posted'] += 1
+                self.advance_to_next_verse()
+                self.save_state()
+
+                print(f"Posted: {verse_data['reference']}")
+                print(f"Tweet ID: {status.id}")
+                print(f"Total verses posted: {self.state['total_verses_posted']}")
+                return True
+            except tweepy.errors.TweepyException as e:
+                print(f"Error posting (attempt {attempt + 1}/3): {e}")
                 if attempt < 2:
                     time.sleep(10)
-                else:
-                    raise
 
-        if response and response.data:
-            self.state['total_verses_posted'] += 1
-            self.advance_to_next_verse()
-            self.save_state()
-
-            print(f"Posted: {verse_data['reference']}")
-            print(f"Total verses posted: {self.state['total_verses_posted']}")
-            return True
-        else:
-            print("Failed to post tweet")
-            return False
+        print("Failed to post after 3 attempts")
+        return False
 
     def run_bot(self):
         print(f"Bot started at {datetime.now()}")
