@@ -3,6 +3,7 @@ import requests
 import json
 from datetime import datetime
 import os
+import time
 
 
 class QuranBot:
@@ -146,8 +147,20 @@ class QuranBot:
             print("Failed to format tweet")
             return False
 
-        response = self.client.create_tweet(text=tweet_text)
-        if response.data:
+        # Retry up to 3 times for transient server errors
+        response = None
+        for attempt in range(3):
+            try:
+                response = self.client.create_tweet(text=tweet_text)
+                break
+            except tweepy.errors.TwitterServerError as e:
+                print(f'Server error (attempt {attempt + 1}/3): {e}')
+                if attempt < 2:
+                    time.sleep(10)
+                else:
+                    raise
+
+        if response and response.data:
             self.state['total_verses_posted'] += 1
             self.advance_to_next_verse()
             self.save_state()
