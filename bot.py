@@ -20,14 +20,14 @@ class QuranBot:
         self.load_state()
 
     def setup_twitter_api(self):
-        auth = tweepy.OAuth1UserHandler(
-            self.api_key, self.api_secret,
-            self.access_token, self.access_token_secret
+        self.client = tweepy.Client(
+            consumer_key=self.api_key,
+            consumer_secret=self.api_secret,
+            access_token=self.access_token,
+            access_token_secret=self.access_token_secret,
+            wait_on_rate_limit=True
         )
-        self.api = tweepy.API(auth, wait_on_rate_limit=True)
-        # Verify credentials
-        user = self.api.verify_credentials()
-        print(f"Authenticated as @{user.screen_name}")
+        print("Twitter client initialized")
 
     def load_state(self):
         try:
@@ -143,24 +143,30 @@ class QuranBot:
             print("Failed to format tweet")
             return False
 
-        # Retry up to 3 times for transient errors
+        # Retry up to 3 times with increasing delay
         for attempt in range(3):
             try:
-                status = self.api.update_status(status=tweet_text)
-                self.state['total_verses_posted'] += 1
-                self.advance_to_next_verse()
-                self.save_state()
+                response = self.client.create_tweet(text=tweet_text)
+                if response.data:
+                    self.state['total_verses_posted'] += 1
+                    self.advance_to_next_verse()
+                    self.save_state()
 
-                print(f"Posted: {verse_data['reference']}")
-                print(f"Tweet ID: {status.id}")
-                print(f"Total verses posted: {self.state['total_verses_posted']}")
-                return True
-            except tweepy.errors.TweepyException as e:
+                    print(f"Posted: {verse_data['reference']}")
+                    print(f"Tweet ID: {response.data['id']}")
+                    print(f"Total verses posted: {self.state['total_verses_posted']}")
+                    return True
+            except tweepy.errors.TwitterServerError as e:
+                print(f"Server error (attempt {attempt + 1}/3): {e}")
+                if attempt < 2:
+                    time.sleep(15 * (attempt + 1))
+            except Exception as e:
                 print(f"Error posting (attempt {attempt + 1}/3): {e}")
                 if attempt < 2:
                     time.sleep(10)
 
-        print("Failed to post after 3 attempts")
+        # Don't crash — just exit gracefully so the next scheduled run can retry
+        print("Could not post this run. Will retry on next scheduled run.")
         return False
 
     def run_bot(self):
@@ -169,7 +175,7 @@ class QuranBot:
         print(f"Total posted so far: {self.state['total_verses_posted']}")
 
         success = self.post_verse()
-        print("Done!" if success else "Failed!")
+        print("Done!" if success else "Will retry next run.")
         return success
 
 
