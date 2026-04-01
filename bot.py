@@ -20,20 +20,14 @@ class QuranBot:
         self.load_state()
 
     def setup_twitter_api(self):
-        try:
-            self.client = tweepy.Client(
-                consumer_key=self.api_key,
-                consumer_secret=self.api_secret,
-                access_token=self.access_token,
-                access_token_secret=self.access_token_secret,
-                wait_on_rate_limit=True
-            )
-            me = self.client.get_me()
-            if me.data:
-                print(f"Authenticated as @{me.data.username}")
-        except Exception as e:
-            print(f"Authentication failed: {e}")
-            raise
+        self.client = tweepy.Client(
+            consumer_key=self.api_key,
+            consumer_secret=self.api_secret,
+            access_token=self.access_token,
+            access_token_secret=self.access_token_secret,
+            wait_on_rate_limit=True
+        )
+        print("Twitter client initialized")
 
     def load_state(self):
         try:
