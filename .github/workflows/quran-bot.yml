@@ -3,7 +3,7 @@ name: Quran Bot Hourly Posts
 on:
   schedule:
     # Run every hour at minute 0 (e.g., 1:00, 2:00, 3:00, etc.)
-    - cron: '0 * * * *'
+    - cron: '*/5 * * * *'
   
   # Allow manual triggering for testing
   workflow_dispatch:
