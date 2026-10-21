@@ -1,41 +1,57 @@
-name: Quran Bot Hourly Posts
+name: Quran Bot Posts
 
 on:
   schedule:
-    # Run every hour at minute 0 (e.g., 1:00, 2:00, 3:00, etc.)
-    - cron: '0 * * * *'
-  
+    # Every 2 hours (12 posts/day). The X free tier caps posting at 17 per 24h,
+    # so hourly (24/day) runs into 429 errors.
+    - cron: '0 */2 * * *'
+
   # Allow manual triggering for testing
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Only print the tweet, do not post'
+        type: boolean
+        default: false
+
+# Needed so the job can push the updated state file
+permissions:
+  contents: write
+
+# Never let two runs post the same verse at once
+concurrency:
+  group: quran-bot
+  cancel-in-progress: false
 
 jobs:
   post-verse:
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 10
+
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-      
+
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
-        python-version: '3.9'
-        
+        python-version: '3.12'
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install tweepy requests
-        
+
     - name: Run Quran Bot
       env:
         API_KEY: ${{ secrets.API_KEY }}
         API_SECRET: ${{ secrets.API_SECRET }}
         ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
         ACCESS_TOKEN_SECRET: ${{ secrets.ACCESS_TOKEN_SECRET }}
-        BEARER_TOKEN: ${{ secrets.BEARER_TOKEN }}
+        DRY_RUN: ${{ inputs.dry_run }}
       run: |
         python bot.py
-        
+
     - name: Commit and push state file
       run: |
         git config --local user.email "action@github.com"
@@ -43,5 +59,3 @@ jobs:
         git add quran_bot_state.json
         git diff --staged --quiet || git commit -m "Update bot state after posting verse"
         git push
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
